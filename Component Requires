@@ -1,0 +1,22 @@
+## Components Used
+
+### Core Hardware
+- Microcontroller- 2 ESP 32
+- IMU Sensor- MPU9250
+- Servo Motors- TowerPro MG996R (180 Degree)
+- Pan-Tilt Mount (mechanical structure for turret movement)  
+
+### Communication Module (any one)
+- I used ESP-now
+- Can also use NRF24L01 RF Module  
+
+
+### Power System
+- 5V regulated power supply (for microcontroller)  
+- External power source for servos (battery pack or adapter)  
+
+### Supporting Components
+- PCB  
+- Jumper wires  
+- Resistors and capacitors (for signal stability and filtering)  
+- Switch (power control)  
