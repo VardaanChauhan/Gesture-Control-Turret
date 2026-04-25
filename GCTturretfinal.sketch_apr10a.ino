@@ -1,66 +1,69 @@
-#include <Wire.h>
-#include <MPU6050.h>
-#include <Servo.h>
+#include <WiFi.h>
+#include <esp_now.h>
+#include <ESP32Servo.h>
 
-MPU6050 mpu;
-
+// Servo objects
 Servo servoPan;
 Servo servoTilt;
 
-// Raw values
-int16_t ax, ay, az;
+#define PAN_PIN   18
+#define TILT_PIN  19
+#define FIRE_PIN  23   // Relay / LED / MOSFET trigger
 
-// Servo angles
-int panAngle = 90;
-int tiltAngle = 90;
+// Structure MUST match transmitter exactly
+typedef struct DataPacket {
+  int panAngle;
+  int tiltAngle;
+  bool fire;
+} DataPacket;
 
-// Sensitivity tuning
-float sensitivity = 0.05;
+DataPacket receivedData;
 
-void setup() {
-  Serial.begin(9600);
-  Wire.begin();
+// Callback function when data is received
+void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len) {
+  memcpy(&receivedData, incomingData, sizeof(receivedData));
 
-  mpu.initialize();
+  // Debug print
+  Serial.print("Pan: ");
+  Serial.print(receivedData.panAngle);
+  Serial.print(" | Tilt: ");
+  Serial.print(receivedData.tiltAngle);
+  Serial.print(" | Fire: ");
+  Serial.println(receivedData.fire);
 
-  if (!mpu.testConnection()) {
-    Serial.println("MPU6050 connection failed");
-    while (1);
-  }
-
-  servoPan.attach(9);   // Pan servo
-  servoTilt.attach(10); // Tilt servo
-
-  servoPan.write(panAngle);
-  servoTilt.write(tiltAngle);
-}
-
-void loop() {
-  mpu.getAcceleration(&ax, &ay, &az);
-
-  // Normalize values
-  float normX = ax / 16384.0;
-  float normY = ay / 16384.0;
-
-  // Map tilt (forward/backward movement)
-  tiltAngle += normY * sensitivity * 100;
-
-  // Map pan (left/right movement)
-  panAngle += normX * sensitivity * 100;
-
-  // Constrain angles
-  panAngle = constrain(panAngle, 0, 180);
-  tiltAngle = constrain(tiltAngle, 0, 180);
+  // Apply constraints (safety)
+  int pan = constrain(receivedData.panAngle, 0, 180);
+  int tilt = constrain(receivedData.tiltAngle, 60, 120);
 
   // Move servos
-  servoPan.write(panAngle);
-  servoTilt.write(tiltAngle);
+  servoPan.write(pan);
+  servoTilt.write(tilt);
 
-  // Debug
-  Serial.print("Pan: ");
-  Serial.print(panAngle);
-  Serial.print(" | Tilt: ");
-  Serial.println(tiltAngle);
+  // Fire control
+  digitalWrite(FIRE_PIN, receivedData.fire ? HIGH : LOW);
+}
 
-  delay(50);
+void setup() {
+  Serial.begin(115200);
+
+  // Servo setup
+  servoPan.attach(PAN_PIN);
+  servoTilt.attach(TILT_PIN);
+
+  pinMode(FIRE_PIN, OUTPUT);
+  digitalWrite(FIRE_PIN, LOW);
+
+  // WiFi in station mode (required for ESP-NOW)
+  WiFi.mode(WIFI_STA);
+
+  // Init ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("ESP-NOW init failed");
+    return;
+  }
+
+  // Register receive callback
+  esp_now_register_recv_cb(onDataRecv);
+
+  Serial.println("Turret Ready. Waiting for data...");
 }
